@@ -1,9 +1,10 @@
 import React, { useCallback } from "react";
 import { StyleSheet, Text, View, Button, Linking } from "react-native";
+import $S from '../styles';
 
 const websiteURL = "https://www.plogalong.com/";
 const mainMessage =
-  "";
+  "TODO";
 const createdBy =
   "";
 
@@ -21,40 +22,24 @@ const OpenURLButton = ({ url, children }) => {
   return <Button title={children} onPress={handlePress} />;
 };
 
-export default class PrivacyAndTermsScreen extends React.Component {
+export default class TermsScreen extends React.Component {
   static navigationOptions = {
-    title: "About Plogalong",
+    title: "Terms",
   };
 
   render() {
     return (
-      <View style={styles.container}>
-        <View style={styles.mainMessageContainer}>
-          <Text style={styles.mainMessageText}>{mainMessage}</Text>
+      <View style={$S.container}>
+        <View style={$S.bodyContainer}>
+          <Text style={$S.body}>{mainMessage}</Text>
+          <Text style={$S.body}>{createdBy}</Text>
         </View>
         {/* Lines 33-35 can be changed into a custom component*/}
-        <View style={styles.mainMessageContainer}>
-          <Text style={styles.mainMessageText}>{createdBy}</Text>
-        </View>
+        
         <OpenURLButton url={websiteURL}>Visit our Website</OpenURLButton>
       </View>
     );
   }
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  mainMessageContainer: {
-    marginHorizontal: 10,
-    marginTop: 10,
-    backgroundColor: "aqua", // change this color
-    alignContent: "center",
-    alignItems: "center",
-  },
-  mainMessageText: {
-    fontSize: 18,
-    padding: 15,
-  },
-});
+// Using 'OpenURLButton' from https://reactnative.dev/docs/linking

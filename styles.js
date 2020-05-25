@@ -4,7 +4,6 @@ import {
 
 import Colors from './constants/Colors';
 
-
 export default StyleSheet.create({
   safeContainer: {
     backgroundColor: 'white',
@@ -108,11 +107,11 @@ export default StyleSheet.create({
     fontWeight: '600',
   },
 
-    subheader: {
-      fontSize: 25,
-      margin: 5,
-      color: Colors.textGray
-    },
+  subheader: {
+    fontSize: 25,
+    margin: 5,
+    color: Colors.textGray
+  },
 
   itemTitle: {
     fontSize: 20,
@@ -147,5 +146,31 @@ export default StyleSheet.create({
     borderWidth: 0,
   },
 
-  detail: {}
+  detail: {},
+
+  bodyContainer: {
+    marginHorizontal: 10,
+    marginTop: 10,
+    
+    alignContent: "center",
+    alignItems: "flex-start",
+  },
+
+  body: {
+    fontSize: 18,
+    marginBottom: 15,
+  },
+  h1: {
+    fontSize: 25,
+    marginTop: 10,
+    marginHorizontal: 10,
+    color: Colors.textGray,
+  },
+
+  h2: {
+    marginLeft: 20,
+    marginRight: 20,
+    padding: 5,
+    textAlign: 'center',
+  },
 });

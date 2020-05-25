@@ -17,6 +17,7 @@ import {
 import Banner from '../components/Banner';
 import Button from '../components/Button';
 import PhotoButton from '../components/PhotoButton';
+import TextInputWithoutIcon from '../components/TextInputWithoutIcon';
 import TextInputWithIcon from '../components/TextInputWithIcon';
 import { setPreferences, logout} from '../redux/actions';
 import { pluralize } from '../util';
@@ -128,7 +129,7 @@ class ProfileScreen extends React.Component {
 
              <View style={$S.inputGroup}>
                <Text style={$S.inputLabel}>Username (visible to others)</Text>
-               <TextInput style={$S.textInput}
+               <TextInputWithoutIcon
                           autoCapitalize="none"
                           value={params.displayName}
                           autoCompleteType="username"
@@ -146,8 +147,7 @@ class ProfileScreen extends React.Component {
                                   onBlur={this.save}
                                   onPress={this.setHomeBaseFromLocationInfo}
                                   iconName="ios-navigate"
-                                  maxLength={40}
-               />
+                                  maxLength={40}/>
              </View>
 
              <View style={$S.switchInputGroup}>
@@ -185,20 +185,22 @@ const styles = StyleSheet.create({
       padding: 20,
   },
   personalInfoContainer: {
-      flexDirection: 'column',
+    flexDirection: 'column',
     marginTop: 10,
     marginBottom: 20,
     alignItems: 'center',
   },
   profileImageButton: {
-      width: 300,
-      height: 300,
-      marginTop: 3,      
+      width: 200,
+      height: 200,
+      marginTop: 3, 
+      marginBottom: 10,     
       borderWidth: 0,
   },
     profileImage: {        
         resizeMode: 'contain',
-
+        width: 200,
+        height: 200,
     },
     personalInfo: {
         flexDirection: 'column',
@@ -210,7 +212,7 @@ const styles = StyleSheet.create({
     },
     buttonContainer: {
         flexDirection: 'column',
-    }
+    },
 });
 
 export default connect(

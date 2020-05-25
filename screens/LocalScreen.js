@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {
   View,
+  Text
 } from 'react-native';
 import {connect} from 'react-redux';
 
@@ -20,16 +21,18 @@ const LocalScreen = ({history, currentUser, likePlog, loading}) => (
               header={
                 <View style={{ paddingTop: 20 }}>
                   <Banner>
-                    You're near a beach. Straws and plastic bags pose the biggest problem.
+                    {
+                      history.length === 0 && !loading
+                        ?
+                        "No nearby ploggers.\nPlog to earn your first badge."
+                        :
+                        "You're near a beach. Straws and plastic bags pose the biggest problem."
+                    }
                   </Banner>
+                  <Text style={$S.h1}>Local Feed</Text>
                 </View>
               }
               footer={
-                loading ?
-                  <View style={{ flexDirection: 'row', justifyContent: 'center', margin: 10 }}>
-                    <Loading/>
-                  </View>
-                :
                 <View style={{ height: 25 }} />
               }
     />
