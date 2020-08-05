@@ -3,7 +3,8 @@ const admin = require('firebase-admin');
 const app = require('./app');
 
 const { updateAchievements, updateStats, AchievementHandlers, calculateBonusMinutes, localPlogDate} = require('./shared');
-const { updatePlogsWhere } = require('./util');
+const $u = require('./util');
+const regions = require('./regions');
 const email = require('./email');
 
 /**
@@ -43,9 +44,10 @@ async function initAchievements(userID, types) {
     return m;
   }, {});
 
-  for await (const plog of queryGen(Plogs.where('d.UserID', '==', userID))) {
-    const plogData = plog.data().d;
+  for await (const plog of queryGen(Plogs.where('UserID', '==', userID))) {
+    const plogData = plog.data();
     plogData.LocalDate = localPlogDate(plogData);
+    plogData.id = plog.id;
     for (const type of types) {
       if (!achievements[type].complete)
         achievements[type] = AchievementHandlers[type].update(
@@ -57,18 +59,26 @@ async function initAchievements(userID, types) {
 }
 
 // TODO Ignore duplicate events
-exports.calculateAchievements = functions.firestore.document('/plogs/{documentId}')
+exports.plogCreated = functions.firestore.document('/plogs/{documentID}')
   .onCreate(async (snap, context) => {
-    const plogData = snap.data().d;
+    const plogData = snap.data();
     const {UserID} = plogData;
     let initUserAchievements;
     const userDocRef = Users.doc(UserID);
 
     await app.firestore().runTransaction(async t => {
-      const user = await t.get(userDocRef);
+      const userPromise = t.get(userDocRef);
+
+      let regionData;
+      if (plogData.Public && plogData.coordinates) {
+        await regions.plogCreated(snap, t);
+      }
+
+      const user = await userPromise;
       const userData = user.data();
 
-      const {achievements, completed, needInit} = updateAchievements(userData.achievements, plogData);
+      plogData.id = snap.id;
+      const {achievements, completed, needInit} = updateAchievements(userData.achievements, plogData, regionData);
 
       t.update(userDocRef, {
         achievements,
@@ -87,6 +97,10 @@ exports.calculateAchievements = functions.firestore.document('/plogs/{documentId
     }
   });
 
+exports.plogDeleted = functions.firestore.document('/plogs/{plogID}')
+  .onDelete(async (snap, context) => {
+    await $u.deletePlogFromRegions(snap.id);
+  });
 
 exports.updateUserPlogs = functions.firestore.document('/users/{userId}')
     .onUpdate(async (snap, context) => {
@@ -94,18 +108,18 @@ exports.updateUserPlogs = functions.firestore.document('/users/{userId}')
         const after = snap.after.data();
 
         if (before.profilePicture !== after.profilePicture || before.displayName !== after.displayName) {
-          await updatePlogsWhere(
-            ['d.UserID', '==', context.params.userId],
+          await $u.updatePlogsWhere(
+            ['UserID', '==', context.params.userId],
             {
-              'd.UserProfilePicture': after.profilePicture,
-              'd.UserDisplayName': after.displayName,
+              'UserProfilePicture': after.profilePicture,
+              'UserDisplayName': after.displayName,
             });
         }
     });
 
-const { admin_email: ADMIN_EMAIL } = functions.config.plogalong || {};
 exports.onCommentCreate = functions.firestore.document('/comments/{commentId}')
   .onCreate(async (snap, context) => {
+    const { admin_email: ADMIN_EMAIL } = functions.config().plogalong || {};
     if (!ADMIN_EMAIL)
       return;
 
@@ -118,7 +132,14 @@ exports.onCommentCreate = functions.firestore.document('/comments/{commentId}')
     });
   });
 
-const { likePlog, loadUserProfile, mergeWithAccount } = require('./http');
-exports.likePlog = functions.https.onCall(likePlog);
-exports.loadUserProfile = functions.https.onCall(loadUserProfile);
-exports.mergeWithAccount = functions.https.onCall(mergeWithAccount);
+const users = require('./users');
+exports.onUserDeleted = functions.auth.user().onDelete(async user => {
+  await users.deleteUserData(user.uid);
+});
+
+const http = require('./http');
+exports.likePlog = functions.https.onCall(http.likePlog);
+exports.loadUserProfile = functions.https.onCall(http.loadUserProfile);
+exports.mergeWithAccount = functions.https.onCall(http.mergeWithAccount);
+exports.reportPlog = functions.https.onCall(http.reportPlog);
+exports.getRegionInfo = functions.https.onCall(http.getRegionInfo);

@@ -9,7 +9,6 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
-import * as Location from 'expo-location';
 import * as Permissions from 'expo-permissions';
 import MapView, { Camera } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +29,7 @@ import * as actions from '../redux/actions';
 import {
   setUserData
 } from '../firebase/auth';
-import { formatAddress } from '../util/location';
+import { formatAddress, prepareAddress, reverseGeocode } from '../util/location';
 
 import PlogScreenWeather from './PlogScreenWeather';
 
@@ -58,6 +57,7 @@ class PlogScreen extends React.Component {
       markedLocation: null,
       markedLocationInfo: null,
       dragging: false,
+      viewHeight: 500
     };
   }
 
@@ -77,7 +77,9 @@ class PlogScreen extends React.Component {
         markedLocationInfo: null,
       });
 
-      this.props.navigation.navigate('History');
+      if (this.props.navigation.isFocused()) {
+        this.props.navigation.navigate('History');
+      }
     }
 
     if (this.props.location && !prevProps.location) {
@@ -142,10 +144,7 @@ class PlogScreen extends React.Component {
         markedLocation: coordinates,
       });
 
-      Location.reverseGeocodeAsync(coordinates).then(locationInfo => {
-        const [address] = locationInfo.sort((a1, a2) => (addressScore(a1) - addressScore(a2)));
-        const {markedLocationInfo} = this.state;
-
+      reverseGeocode(coordinates).then(locationInfo => {
         this.setState({ markedLocationInfo: locationInfo[0] });
       }, console.warn);
 
@@ -177,7 +176,11 @@ class PlogScreen extends React.Component {
     const coords = this.state.markedLocation || this.props.location,
           locationInfo = this.state.markedLocationInfo || this.props.locationInfo;
     const plog = {
-      location: coords ? {lat: coords.latitude, lng: coords.longitude, name: locationInfo.street } : null,
+      location: coords ? {
+        lat: coords.latitude,
+        lng: coords.longitude,
+        name: formatAddress(locationInfo)
+      } : null,
       when: new Date(),
       pickedUp: this.mode === 'Log',
       trashTypes: Object.keys(this.state.trashTypes),
@@ -300,9 +303,9 @@ class PlogScreen extends React.Component {
                         style={styles.selectableItem}
                         selected={value === activity}
                 />
-              )
+              );
             }
-                                               )}
+          )}
           </View>
           <Answer answer={activityName} style={$S.h2}/>
 
@@ -320,9 +323,8 @@ class PlogScreen extends React.Component {
                         style={styles.selectableItem}
                         selected={value === group}
                 />
-              )
-            }
-                                           )}
+              );
+            })}
           </View>
           <Answer answer={groupName} style={$S.h2}/>
         </>
@@ -340,21 +342,38 @@ class PlogScreen extends React.Component {
           typesCount ? Options.trashTypes.get(trashTypes[0]).title : '',
           {params} = this.state,
           {user, error, preferences: { showDetailedOptions }} = this.props,
-          locationInfo = state.markedLocationInfo || this.props.locationInfo;
+          locationInfo = state.markedLocationInfo || this.props.locationInfo,
+          where = locationInfo && (prepareAddress(locationInfo) || { name: 'off the grid' })
     const ActivityIcon = Options.activities.get(state.activityType[0]).icon;
 
     const firstNullIdx = this.state.plogPhotos.findIndex(p => !p);
     return (
-      <ScrollView style={$S.screenContainer} contentContainerStyle={$S.scrollContentContainer}>
+      <ScrollView 
+        style={$S.screenContainer} 
+        contentContainerStyle={$S.scrollContentContainer}
+        onLayout={e => {
+          this.setState({
+            viewHeight: e.nativeEvent.layout.height
+          });
+        }}
+        >
 
         <PlogScreenWeather />
 
-        <Text style={$S.h1}>Log a Plog</Text>
-
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 8, paddingTop: 10 }}>
-          <Text style={{ fontWeight: '500', paddingLeft: 10 }}>
-            {locationInfo ? `Plogging ${formatAddress(locationInfo) || 'off the grid'}` : ' '}
-          </Text>
+          {
+            where &&
+            <>
+              <View style={styles.locationText}>
+                <Text style={{ }}>
+                  Plogging {where.preposition}{' '}
+                  </Text>
+                <Text style={styles.locationName}>
+                  {where.name}
+                </Text>
+              </View>
+          </>
+          }
           <Text style={styles.timer}>
             {/* <Text onPress={this.clearTimer} style={styles.clearButton}>clear</Text> */}
             <Text> </Text>
@@ -362,12 +381,12 @@ class PlogScreen extends React.Component {
           </Text>
         </View>
 
-        <View style={styles.mapContainer}>
+        <View style={[styles.mapContainer, { height: state.viewHeight*0.5 }]}>
           <MapView
             ref={mapView => this.mapView = mapView}
             style={[styles.map]}
             initialCamera={this.makeCamera()}
-            showsMyLocationButton={true}
+            showsMyLocationButton={false}
             showsTraffic={false}
             showsUserLocation={true}
             followsUserLocation={this.state.shouldFollow}
@@ -414,12 +433,16 @@ class PlogScreen extends React.Component {
             this.state.plogPhotos.map((plogPhoto, idx) => (
               <PhotoButton onPictureSelected={picture => this.addPicture(picture, Math.min(idx, firstNullIdx))}
                            style={styles.photoButton}
-                           imageStyle={{ resizeMode: 'contain', width: '90%', height: '80%' }}
+                           imageStyle={{ 
+                              resizeMode: 'contain',
+                              width: '90%', 
+                              height: '80%', 
+                           }}
                            onCleared={_ => this.addPicture(null, idx)}
                            photo={plogPhoto}
                            key={idx}
                            manipulatorActions={[
-                             { resize: { width: 300, height: 300 } },
+                             { resize: { width: Options.plogPhotoWidth, height: Options.plogPhotoHeight } },
                            ]}
               />
             ))
@@ -466,51 +489,65 @@ class PlogScreen extends React.Component {
 }
 
 const styles = StyleSheet.create({
-  photoStrip: {
-    flex: 1,
-    flexDirection: 'row',
-    marginTop: 10,
-    justifyContent: 'space-around'
-  },
+    photoStrip: {
+        flex: 1,
+        flexDirection: 'row',
+        marginTop: 10,
+        justifyContent: 'space-around'
+    },
 
-  photoButton: {
-    flex: 1,
-    marginHorizontal: 7,
-    aspectRatio: 1,
-  },
+    photoButton: {
+        flex: 1,
+        marginHorizontal: 7,
+        aspectRatio: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
 
-  mapContainer: {
-    borderColor: Colors.borderColor,
-    borderWidth: 1,
-    flex: 1,
-    height: 300,
-    margin: 5,
-    position: 'relative'
-  },
+    mapContainer: {
+        borderColor: Colors.borderColor,
+        borderWidth: 1,
+        flex: 1,
+        height: 300,
+        margin: 5,
+        position: 'relative'
+    },
 
-  map: {
-    width: '100%',
-    height: '100%'
-  },
+    map: {
+        width: '100%',
+        height: '100%'
+    },
 
-  timerButton: {
-    width: '30%',
-    margin: 'auto',
-    backgroundColor: 'white'
-  },
+    timerButton: {
+        width: '30%',
+        margin: 'auto',
+        backgroundColor: 'white'
+    },
 
-  timerButtonContainer: {
-    alignItems: 'center',
-    position: 'absolute',
-    bottom: '10%',
-    left: 0,
-    width: '100%'
-  },
+    timerButtonContainer: {
+        alignItems: 'center',
+        position: 'absolute',
+        bottom: '10%',
+        left: 0,
+        width: '100%'
+    },
 
-  timer: {
-    textAlign: 'right',
-    paddingRight: 5
-  },
+    timer: {
+        textAlign: 'right',
+        paddingRight: 5
+    },
+
+    locationText: {
+      paddingLeft: 10,
+      flexShrink: 1,
+      flexDirection: 'row'
+    },
+
+    locationName: {
+      fontWeight: '500',
+      flexShrink: 1,
+      maxHeight: 100,
+    },
 
   myLocationButtonContainer: {
     height: '100%',

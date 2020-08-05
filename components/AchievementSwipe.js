@@ -1,14 +1,15 @@
 import * as React from 'react';
-import {FlatList, StyleSheet} from 'react-native';
+import {
+  FlatList,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
 import * as $u from '../util/users';
 
-import AchievementBadge from './AchievementBadge';
-import AchievedTypes from '../constants/AchievedMockup';
+import AchievementBadge, { BadgeWidth } from './AchievementBadge';
 
 
-const AchievementSwipe = ({achievements, showAll=false}) => {
+const AchievementSwipe = ({achievements, showAll=false, style}) => {
   if (!achievements) achievements = {};
   const data = $u.processAchievements(achievements, {
     unstarted: showAll,
@@ -23,14 +24,20 @@ const AchievementSwipe = ({achievements, showAll=false}) => {
       renderItem={({ item }) =>
                   <AchievementBadge
                     achievement={item}
-                    onPress={() => navigation.navigate('AchievementModal', { achievement: item })} />
+                    onPress={() => navigation.navigate('AchievementModal', { achievementType: item.key })}
+                    accessibilityLabel="Achievement details"
+                    accessibilityHint="Click to view achievement details"
+                    accessibilityRole="button"
+                  />
                  }
       keyExtractor={item => item.key}
       pagingEnabled={true}
       horizontal={true}
+      snapToAlignment="start"
+      snapToInterval={BadgeWidth}
       showsHorizontalScrollIndicator={false}
-    >
-    </FlatList>
+      style={style}
+    />
   );
 };
 

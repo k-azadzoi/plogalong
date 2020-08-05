@@ -12,12 +12,16 @@
 /**
  * @typedef {any} Plog
  */
+/** @typedef {any} Region */
 
-/** @typedef {{ completed: Timestamp, updated: Timestamp } & { [k in PropertyKey ]: any}} AchievementData */
+/**
+  * @typedef {{ completed: Timestamp, updated: Timestamp, refID: string } & { [k in PropertyKey ]: any}} AchievementData
+  */
 /**
  * @typedef {Object} AchievementHandler
  * @property {AchievementData} initial
- * @property {(previous: AchievementData, plog: Plog) => AchievementData} update
+ * @property {(previous: AchievementData, plog: Plog, region: Region) => AchievementData} update
+ * @property {(left: AchievementData, right: AchievementData) => Partial<AchievementData>} [merge]
  * @property {number} points
  */
 
@@ -55,6 +59,12 @@ const _addPred = (pred, handler) => {
   return handler;
 };
 
+const min = (a, b) => a <= b ? a : b;
+const max = (a, b) => a >= b ? a : b;
+
+const newest = (a, b) => a ? (b ? max(a, b) : a) : b;
+const oldest = (a, b) => a ? (b ? min(a, b) : a) : b;
+
 /**
  * Creates a handler for an achievement that is completed when a user has
  * plogged a `target` number of plogs.
@@ -69,14 +79,23 @@ function _makeCountAchievement(target, points=50) {
     initial: {
       completed: null,
       updated: null,
-      count: 0
+      count: 0,
+      refID: null
     },
     update(previous, plog) {
       const {count = 0} = previous;
+      const completed = count + 1 >= target ? plog.DateTime : null;
+
       return {
-        completed: count + 1 >= target ? plog.DateTime : null,
+        completed,
         updated: plog.DateTime,
         count: count + 1,
+        refID: completed ? plog.id : null
+      };
+    },
+    merge(left, right) {
+      return {
+        count: (left.count || 0) + (right.count || 0)
       };
     },
     points
@@ -84,7 +103,7 @@ function _makeCountAchievement(target, points=50) {
 }
 
 /**
- * Creates a handler for an achievement 
+ * Creates a handler for an achievement
  *
  * @param {number} target
  * @param {number} points
@@ -98,6 +117,7 @@ function _makeStreakHandler(target, points, floor=floorDay, inc=incDay) {
     completed: null,
     updated: null,
     streak: 0,
+    refID: null,
     // Set when the streak is lost
     longestStreak: null,
     // Date when the longest streak was lost
@@ -122,6 +142,7 @@ function _makeStreakHandler(target, points, floor=floorDay, inc=incDay) {
           changes.streak = streak + 1;
           if (changes.streak >= target) {
             changes.completed = DateTime;
+            changes.refID = plog.id;
           }
         } else {
           changes.streak = 1;
@@ -134,6 +155,13 @@ function _makeStreakHandler(target, points, floor=floorDay, inc=incDay) {
       }
 
       return Object.assign(previous, changes);
+    },
+    merge(left, right) {
+      return {
+        streak: max(left.streak, right.streak),
+        longestStreak: max(left.longestStreak, right.longestStreak),
+        streakLost: newest(left.streakLost, right.streakLost)
+      };
     }
   };
 }
@@ -147,10 +175,23 @@ function _makeStreakHandler(target, points, floor=floorDay, inc=incDay) {
  * @returns {AchievementHandler}
  */
 const _makeOneShotAchievement = (pred, points=50) => ({
-  initial: { completed: null },
+  initial: { completed: null, refID: null },
   points,
-  update: (previous, plog) =>  pred(plog) ? { completed: plog.DateTime } : previous
+  update: (previous, plog) =>  pred(plog) ? { completed: plog.DateTime, refID: plog.id } : previous
 });
+
+/** @type {AchievementHandler} */
+const BreakTheSealAchievement = {
+  initial: { completed: null, refID: null },
+  points: 100,
+  update: (previous, plog, region) => {
+    if (region && region.recentPlogs.length === 1) {
+      return { completed: plog.DateTime, refID: plog.id };
+    }
+
+    return previous;
+  }
+};
 
 const withPlogMonthDay = fn => (({LocalDate}) => fn(LocalDate.getMonth(), LocalDate.getDate()));
 
@@ -161,9 +202,11 @@ const withPlogMonthDay = fn => (({LocalDate}) => fn(LocalDate.getMonth(), LocalD
 // information on the plog and previous achievement data.
 
 // This approach is enough to cover these achievements:
+//
 //   First Plog, Team Effort, True Native, Bug Zapper, Danger Pay, Daredevil,
 //   100 Club, Dog Days, Spring Chicken, Fall Color, Polar Bear, Plog Away, 1000
-//   club, Streaker
+//   club, Streaker, Dog's Best Friend, Marathoner, Take A Hike, Water Sports,
+//   Babysitter, Twofer, No Butts
 
 // The general approach will also work for these, once we assign geo labels to
 // plogs:
@@ -180,17 +223,26 @@ const AchievementHandlers = {
   ['100Club']: _makeCountAchievement(100, 1000),
   ['1000Club']: _makeCountAchievement(1000, 10000),
   streaker: _makeStreakHandler(7, 250),
-  teamEffort: _makeOneShotAchievement(plog => plog.groupType === 'team', 20),
+  teamEffort: _makeOneShotAchievement(plog => plog.HelperType === 'team', 20),
+  dogsBestFriend: _makeOneShotAchievement(plog => plog.HelperType === 'dog', 20),
+  babysitter: _makeOneShotAchievement(plog => plog.HelperType === 'teacher', 20),
+  twofer: _makeOneShotAchievement(plog => plog.HelperType === 'friend', 20),
   bugZapper: _makeOneShotAchievement(
-    plog => (plog.trashTypes||[]).includes('standing_water'), 20),
+    plog => (plog.TrashTypes||[]).includes('standing_water'), 20),
   dangerPay: _makeOneShotAchievement(
-    plog => (plog.trashTypes||[]).find(type => type.match(/^glass|standing_water$/)), 20),
-  daredevil: _makeOneShotAchievement(plog => plog.activityType === 'biking', 20),
+    plog => (plog.TrashTypes||[]).find(type => type.match(/^glass|standing_water$/)), 20),
+  trueNative: _makeOneShotAchievement(plog => (plog.TrashTypes||[]).includes('invasive_plants')),
+  noButts: _makeOneShotAchievement(plog => (plog.TrashTypes||[]).includes('cigarette_butts')),
+  daredevil: _makeOneShotAchievement(plog => plog.ActivityType === 'biking', 20),
+  marathoner: _makeOneShotAchievement(plog => plog.ActivityType === 'running', 20),
+  takeAHike: _makeOneShotAchievement(plog => plog.ActivityType === 'hiking', 20),
 
   dogDays: _makeOneShotAchievement(withPlogMonthDay((m, d) => (m === 5 && d === 21) || m === 6 || m === 7 || (m === 8 && d < 21))),
   springChicken: _makeOneShotAchievement(withPlogMonthDay((m, d) => (m === 2 && d === 21) || m === 3 || m === 4 || (m === 5 && d < 21))),
   fallColor: _makeOneShotAchievement(withPlogMonthDay((m, d) => (m === 8 && d === 21) || m === 9 || m === 10 || (m === 11 && d < 21))),
   polarBear: _makeOneShotAchievement(withPlogMonthDay((m, d) => (m === 11 && d === 21) || m === 0 || m === 1 || (m === 2 && d < 21))),
+
+  breakTheSeal: BreakTheSealAchievement,
 };
 
 /** @typedef {keyof typeof AchievementHandlers} AchievementType */
@@ -203,10 +255,11 @@ const AchievementHandlers = {
  *
  * @param {UserAchievements} achievements
  * @param {Plog|Plog[]} newPlogs
+ * @param [region]
  *
  * @returns {{ achievements: UserAchievements, needInit: AchievementType[], completed: AchievementType[] }}
  */
-function updateAchievements(achievements, newPlogs) {
+function updateAchievements(achievements, newPlogs, region) {
   /** @type {AchievementType[]} */
   const names = Object.keys(AchievementHandlers);
   const needInit = [];
@@ -234,11 +287,10 @@ function updateAchievements(achievements, newPlogs) {
 
     try {
       for (const plog of plogs) {
-        current = handler.update(current, plog);
+        current = handler.update(current, plog, region);
 
         if (current.completed) {
           completed.push(name);
-          break;
         }
       }
 
@@ -265,13 +317,56 @@ function updateAchievements(achievements, newPlogs) {
 const updateAchievementsLocal = (...args) => (updateAchievements(...args).achievements);
 
 /**
+ * @param {UserAchievements} achievementsA
+ * @param {UserAchievements} achievementsB
+ *
+ * @returns {UserAchievements}
+ */
+function mergeAchievements(achievementsA, achievementsB) {
+  if (!achievementsB) return achievementsA;
+  if (!achievementsA) return achievementsB;
+
+  const merged = {};
+  const names = /** @type {AchievementType[]} */(Object.keys(AchievementHandlers));
+
+  for (const name of names) {
+    const a = achievementsA[name];
+    const b = achievementsB[name];
+
+    if (!(a && b)) {
+      merged[name] = a || b;
+      continue;
+    }
+
+    // Choose the one that has completed the achievement. If that's both, choose
+    // the one that was completed first.
+    if (a.completed) {
+      merged[name] = b.completed ? (a.completed <= b.completed ? a : b) : a;
+    } else if (b.completed) {
+      merged[name] = b;
+    } else {
+      // Only call the 'merge' function if neither a nor b has completed the
+      // achievement
+      const fn = AchievementHandlers[name].merge;
+      const shared = {
+        updated: newest(a.updated, b.updated),
+        completed: null
+      };
+      merged[name] = Object.assign(shared, fn ? fn(a, b) : a);
+    }
+  }
+
+  return merged;
+}
+
+/**
  * Records aggregated stats for a particular time unit
  *
  * @typedef {object} PlogStats
  * @property {string} whenID - used as an identifier for the unit on which the
  *   stats are aggregated. E.g., if the user's most recent plog is on 4/3/21,
  *   the year PlogStats would have a `whenID` value of `2021` and the `month`
- *   PlogStats would have a `whenD` value of `2021-4`
+ *   PlogStats would have a `whenID` value of `2021-04`.
  * @property {number} milliseconds - total time plogged during this time period
  * @property {number} count
  */
@@ -285,13 +380,19 @@ const updateAchievementsLocal = (...args) => (updateAchievements(...args).achiev
  * @property {PlogStats} [year]
  * @property {PlogStats} [total]
  */
+/** @typedef {UserStats} RegionStats */
 
 /** @typedef {KeysWithValueType<UserStats, PlogStats>} TimeUnit */
 /** @typedef {{ unit: TimeUnit, when: (dt: Date) => string }} TimeUnitConfig */
 
+const _zpad = n => `${n < 10 ? '0': ''}${n}`;
+
+/// Within a given time unit, the typographic ordering of whenIDs should
+/// preserve the natural order
+
 /** @type {TimeUnitConfig[]} */
 const timeUnits = [
-  { unit: 'month', when: dt => `${dt.getFullYear()}-${dt.getMonth()+1}` },
+  { unit: 'month', when: dt => `${dt.getFullYear()}-${_zpad(dt.getMonth()+1)}` },
   { unit: 'year', when: dt => ''+dt.getFullYear() },
   { unit: 'total', when: _ => 'total' },
 ];
@@ -329,6 +430,39 @@ function updateStats(stats, plog, bonusMinutes=0) {
 }
 
 /**
+ * @param {UserStats} statsA
+ * @param {UserStats} statsB
+ */
+function mergeStats(statsA, statsB) {
+  /** @type {UserStats} */
+  const merged = {};
+  for (let {unit} of timeUnits) {
+    const fromUnitStats = statsA[unit];
+    const toUnitStats = statsB[unit];
+
+    if (!toUnitStats)
+      merged[unit] = fromUnitStats;
+    if (!fromUnitStats)
+      merged[unit] = toUnitStats;
+
+    if (fromUnitStats.whenID === toUnitStats.whenID) {
+      merged[unit] = {
+        whenID: fromUnitStats.whenID,
+        milliseconds: fromUnitStats.milliseconds + toUnitStats.milliseconds,
+        count: fromUnitStats.count + toUnitStats.count
+      };
+      continue;
+    }
+
+    /// Relies on the typographic ordering of whenID preserving the
+    /// chronological ordering of the underlying date
+    merged[unit] = fromUnitStats.whenID > toUnitStats.whenID ? fromUnitStats : toUnitStats;
+  }
+
+  return merged;
+}
+
+/**
  * @param {AchievementType[]} achievements
  * @returns {number}
  */
@@ -341,6 +475,8 @@ module.exports = {
   timeUnits,
   localPlogDate,
   calculateBonusMinutes,
+  mergeAchievements,
+  mergeStats,
   updateAchievements,
   updateAchievementsLocal,
   updateStats,
