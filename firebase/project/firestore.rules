@@ -27,7 +27,7 @@ service cloud.firestore {
     }
 
     match /plogs/{any} {
-    	allow read: if request.auth.uid != null && (!resource.data || request.auth.uid == resource.data.UserID || resource.data.Public)
+    	allow read: if request.auth.uid != null && (resource == null || request.auth.uid == resource.data.UserID || resource.data.Public)
       allow delete: if request.auth.uid != null && request.auth.uid == resource.data.UserID;
       allow create: if request.auth.uid == request.resource.data.UserID
                     && request.resource.data.keys().hasOnly([
@@ -64,8 +64,9 @@ service cloud.firestore {
     match /comments/{any} {
       allow create: if request.auth.uid != null
                     && request.resource.data.keys().hasOnly([
-                       "comment", "email", "label", "name", "topic"
+                       "comment", "email", "label", "name", "topic", "date"
                     ])
+                    && timestampCurrent(request.resource.data.date, 60)
     }
 
     match /regions/{any} {

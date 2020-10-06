@@ -1,13 +1,13 @@
 import * as React from 'react';
 import {
   View,
-  Text
+  ScrollView,
 } from 'react-native';
-import {connect} from 'react-redux';
-import MapView, {Marker} from 'react-native-maps';
+import { shallowEqual } from 'react-redux';
+import { useDispatch, useSelector, usePaginatedPlogs, useLocation } from '../redux/hooks';
+import MapView, { Marker } from 'react-native-maps';
 
 import * as actions from '../redux/actions';
-import { keep } from '../util/iter';
 import $S from '../styles';
 
 import Banner from '../components/Banner';
@@ -18,114 +18,105 @@ import Colors from '../constants/Colors';
 import PlogList from '../components/PlogList';
 
 
-const LocalScreen = ({history, currentUser, likePlog, loading, location, loadLocalHistory, navigation, region}) => {
-  React.useEffect(() => {
-    loadLocalHistory();
+const LocalScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
+  const likePlog = React.useCallback((...args) => {
+    dispatch(actions.likePlog(...args));
   }, []);
+
+  const { currentUser, loading, plogIDs } =
+        useSelector(({ log, users }) => {
+          const { plogData, localPlogs } = log;
+
+          return {
+            plogIDs: log.localPlogsLoading ? [] : localPlogs,
+            currentUser: users.current,
+            loading: log.localPlogsLoading,
+          };
+        }, shallowEqual);
+  const location = useLocation();
+
+  React.useEffect(() => {
+    dispatch(actions.loadLocalHistory());
+  }, [currentUser && currentUser.uid]);
 
   const goToPlogScreen = React.useCallback(() => {
     navigation.navigate('Plog');
   }, [navigation]);
-  const goToInviteScreen = React.useCallback(() => {
-    navigation.navigate('Invite');
-  }, [navigation]);
+
+  const [history, , loadNextPage] = usePaginatedPlogs(plogIDs);
+
   const ActivityIcon = Options.activities.get('walking').icon;
-
   const noPloggers = history.length === 0 && !loading;
+  // const recentCount = history.filter(plog => plog.userID !== currentUser.uid).length;
+  const recentCount = history.length;
 
-  return (
-    <View style={$S.screenContainer}>
-      <PlogList plogs={history}
-                currentUser={currentUser}
-                likePlog={likePlog}
-                loadNextPage={() => {
-                  if (!loading)
-                    loadLocalHistory(false);
-                }}
-                header={
-                  <View style={{ paddingTop: 20 }}>
-                    <Banner>
-                      {
-                        noPloggers
-                          ?
-                          "There are no other ploggers nearby.\nStart a trend!"
-                          :
-                          `There are ${history.length} ploggers nearby.`
-                      }
-                    </Banner>
-                    {noPloggers && <>
-                      <View style={$S.mapContainer}>
-                        {location ?
-                          <MapView
-                            style={[$S.map]}
-                            camera={location && {
-                              center: location,
-                              pitch: 0,
-                              heading: 0,
-                              altitude: 10000,
-                              zoom: 14
-                            }}
-                            showsMyLocationButton={false}
-                            showsTraffic={false}
-                            showsUserLocation={false}
-                            zoomControlEnabled={false}
-                          >
-                            <Marker coordinate={location}
-                              tracksViewChanges={true}
-                            >
-                              <ActivityIcon
-                                width={40}
-                                height={40}
-                                fill={Colors.activeColor}
-                              />
-                            </Marker>
-                          </MapView> :
-                          <View style={$S.map} />
-                        }
-                        <View style={$S.footerButtons}>
-                          <Button title="Plog"
-                            large primary
-                            onPress={goToPlogScreen}
-                          />
-                          <Button title="Invite"
-                            large
-                            onPress={goToInviteScreen}
-                          />
-                        </View>
-                      </View>
-                    </>}
-                    {/* {
-                      region &&
-                        <Text style={$S.h1}>
-                          {region.county}, {region.state}
-                        </Text>
-                    } */}
-                  </View>
-                }
-                footer={
-                  loading ?
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', margin: 10 }}>
-                      <Loading/>
-                    </View>
-                  :
-                  <View style={{ height: 25 }} />
-                }
-      />
-    </View>
+  const header = (
+    <Banner>
+      The best time to plog is yesterday.{'\n'}The second best time is today!
+    </Banner>
   );
+
+  if (noPloggers) {
+    return (
+      <ScrollView style={$S.screenContainer} contentContainerStyle={$S.scrollContentContainer}>
+        {header}
+        <View style={$S.mapContainer}>
+          {location ?
+            <MapView
+              style={[$S.map]}
+              camera={location && {
+                center: location,
+                pitch: 0,
+                heading: 0,
+                altitude: 10000,
+                zoom: 14
+              }}
+              showsMyLocationButton={false}
+              showsTraffic={false}
+              showsUserLocation={false}
+              zoomControlEnabled={false}
+            >
+              <Marker coordinate={location}
+                tracksViewChanges={true}
+              >
+                <ActivityIcon
+                  width={40}
+                  height={40}
+                  fill={Colors.activeColor}
+                />
+              </Marker>
+            </MapView> :
+            <View style={$S.map} />
+          }
+        </View>
+        <View style={$S.footerButtons}>
+            <Button title="Plog"
+              large primary
+              onPress={goToPlogScreen}
+            />
+        </View>
+      </ScrollView>);
+  } else {
+    return (
+      <View style={[$S.scrollContentContainer, $S.screenContainer]}>
+        <PlogList plogs={history}
+          currentUser={currentUser}
+          likePlog={likePlog}
+          loadNextPage={loadNextPage}
+          header={header}
+          footer={
+            loading ?
+              <View style={{ flexDirection: 'row', justifyContent: 'center', margin: 10 }}>
+                <Loading />
+              </View>
+              :
+              <View style={{ height: 25 }} />
+          }
+        />
+      </View>
+    );
+  }
 };
 
-export default connect(({log, users}) => {
-  const {plogData, localPlogs} = log;
-
-  return {
-    history: keep(id => plogData[id], localPlogs).sort((a, b) => (b.when - a.when)),
-    currentUser: users.current,
-    loading: log.localPlogsLoading,
-    location: users.location,
-    region: log.region,
-  };
-}, dispatch => ({
-  likePlog: (...args) => dispatch(actions.likePlog(...args)),
-  loadLocalHistory: (...args) => dispatch(actions.loadLocalHistory(...args)),
-}))(LocalScreen);
+export default LocalScreen;

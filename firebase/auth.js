@@ -3,6 +3,7 @@ import {
  } from 'react-native';
 
 import * as AppAuth from 'expo-app-auth';
+import * as Crypto from 'expo-crypto';
 import * as Facebook from 'expo-facebook';
 import * as Google from 'expo-google-app-auth';
 import * as GoogleSignIn from 'expo-google-sign-in';
@@ -127,6 +128,17 @@ const withGoogleCredential =
 if (InExpo)
   YellowBox.ignoreWarnings(['Deprecated: You will need to use expo-google-sign-in']);
 
+const makeRandom = len => {
+  let data = '', left = len;
+
+  while (left > 0) {
+    data += Math.random().toString(36).slice(2, 2+left);
+    left = len - data.length;
+  }
+
+  return data;
+};
+
 /**
  * @template T
  * @param {(cred: firebase.auth.OAuthProvider) => Promise<T>} fn
@@ -134,15 +146,20 @@ if (InExpo)
 const withAppleCredential = fn => (
   async () => {
     try {
+      const rawNonce = makeRandom(10);
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
       const result = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.EMAIL
-        ]
+        ],
+        nonce: hashedNonce
       });
 
       const credential = new firebase.auth.OAuthProvider('apple.com')
             .credential({
               idToken: result.identityToken,
+              rawNonce
             });
       return await fn(credential);
     } catch (err) {
@@ -180,6 +197,7 @@ export const linkToApple = withAppleCredential(cred => auth.currentUser.linkWith
 export const unlinkApple = () => auth.currentUser.unlink('apple.com').then(_refreshUser);
 
 
+/** @type {typeof auth.signInWithEmailAndPassword} */
 export const loginWithEmail = auth.signInWithEmailAndPassword.bind(auth);
 
 export const linkToEmail = async (email, password) => {
@@ -192,6 +210,8 @@ export const linkToEmail = async (email, password) => {
 
   return userCred.user;
 };
+
+export const loginAnonymously = auth.signInAnonymously.bind(auth);
 
 export const logOut = () => auth.signOut();
 

@@ -1,33 +1,45 @@
 import React from "react";
 import { useState } from 'react';
 import {
-  ScrollView,
   StyleSheet,
   Text,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+
+import * as actions from '../redux/actions';
 import {connect} from 'react-redux';
+import { useDispatch, useSelector } from '../redux/hooks';
+import { shallowEqual } from 'react-redux';
+import { getStats, calculateTotalPloggingTime, formatCompletedBadges, calculateCompletedBadges, formatPloggingMinutes } from '../util';
 
-import {getStats} from '../util';
-
+import $S from '../styles';
 import AchievementSwipe from '../components/AchievementSwipe';
 import Banner from '../components/Banner';
 import Colors from '../constants/Colors';
+import Leaderboard from '../screens/Leaderboard';
 
-export const AchievementScreen = ({currentUser}) => {
+
+export const AchievementScreen = ({currentUser }) => {
+    const dispatch = useDispatch();
+    React.useEffect(() => {
+        dispatch(actions.loadLocalHistory());
+      }, []);
+
+    const { region } = useSelector(({ log }) => {
+        return {
+          region: log.region,
+        };
+      }, shallowEqual);
 
     const [isBadges, setIsBadges] = useState(true);
 
-    const bonus = getStats(currentUser, 'total').bonusMinutes
-    let badgeCount = 0;
-    for (const badge in currentUser.data.achievements) {
-            if (currentUser.data.achievements[badge] != null && currentUser.data.achievements[badge].completed != null) {badgeCount += 1}
-        }
+    const stats = getStats(currentUser, 'total')
+
     return (
         <View style={{margin: 15, padding: 0,}}>
         <Banner >
-            You earned {badgeCount} badge{badgeCount === 1 ? '': 's'} and {bonus === undefined ? 0: bonus} bonus minute{bonus === 1 ? '': 's'}.
+            You earned {formatCompletedBadges(calculateCompletedBadges(currentUser.data.achievements))} and {'\n'} {formatPloggingMinutes(calculateTotalPloggingTime(stats))}!
         </Banner>
         <View style={styles.toggle}>
         <TouchableWithoutFeedback onPress={() => setIsBadges(true)}>
@@ -42,19 +54,23 @@ export const AchievementScreen = ({currentUser}) => {
         </TouchableWithoutFeedback>
         </View>
         {isBadges ? (
-        <ScrollView>
             <AchievementSwipe
                 achievements={currentUser.data.achievements}
                 showAll={true}
-                style={{ marginBottom: 120, marginTop: 25,}}
+                style={{marginTop: 25,}}
                 numColumns={3}
                 horizontal={false}
+                inset={{paddingBottom: 120,}}
             />
-        </ScrollView>
         ) :
-        (<Text style={{textAlign: 'center', fontSize: 18, marginTop: 20,}}>
-            The Leaderboard is still under construction. Come back soon!
-        </Text>)
+ 
+                region &&
+                <>
+                    <View style={{ height: '100%' }}>
+                        <Leaderboard regionID={region.id} style={$S.subheadLink}/>
+                    </View>
+                </>
+
         }
       </View>
     );
@@ -86,9 +102,7 @@ const styles = StyleSheet.create({
 });
 
 
-export default connect(({log, users}) => {
-    const {plogData, history} = log;
-  
+export default connect(({users}) => {
     return {
       currentUser: users.current,
     };

@@ -12,6 +12,7 @@ import {
   PLOG_DELETED,
   PLOG_DATA,
   SET_REGION,
+  LOCAL_PLOG_IDS,
 } from "../actionTypes";
 
 import { specUpdate, revert, updateInCopy } from '../../util/redux';
@@ -30,6 +31,10 @@ const initialState = {
   region: null,
   historyLoading: false,
   localPlogsLoading: false,
+  submitting: null,
+  /** @type {string} */
+  lastPlogID: null, // the ID of the last plog saved from this client since the app started
+  logError: null,
 };
 
 /**
@@ -44,7 +49,7 @@ const log = (state = initialState, action) => {
       return { ...state, submitting: payload.plog, logError: null };
 
     case PLOG_LOGGED:
-      return { ...state, submitting: null };
+      return { ...state, lastPlogID: payload.plogID, submitting: null };
 
     case LOG_PLOG_ERROR:
       return { ...state, submitting: null, logError: action.error };
@@ -57,7 +62,10 @@ const log = (state = initialState, action) => {
     }
 
     case LOAD_LOCAL_HISTORY: {
-      return { ...state, localPlogsLoading: true };
+      return {
+        ...state,
+        localPlogsLoading: true,
+      };
     }
 
     case PLOG_DATA: {
@@ -69,6 +77,14 @@ const log = (state = initialState, action) => {
           ...state.plogData,
           ...plogs.reduce((pd, plog) => { pd[plog.id] = plog; return pd; }, {})
         }
+      };
+    }
+
+    case LOCAL_PLOG_IDS: {
+      return {
+        ...state,
+        localPlogs: action.payload.plogIDs,
+        localPlogsLoading: false
       };
     }
 

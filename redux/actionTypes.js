@@ -19,8 +19,10 @@ export const LOAD_LOCAL_HISTORY = 'LOAD_LOCAL_HISTORY';
 export const PLOG_DATA = 'PLOG_DATA';
 
 export const LOAD_PLOGS = 'LOAD_PLOGS';
+export const UNLOAD_PLOGS = 'UNLOAD_PLOGS';
 
 export const SET_REGION = 'SET_REGION';
+export const LOCAL_PLOG_IDS = 'LOCAL_PLOG_IDS';
 
 export const SET_CURRENT_USER = 'SET_CURRENT_USER';
 export const USER_DATA = 'USER_DATA';
@@ -34,6 +36,8 @@ export const SIGNUP_ERROR = 'SIGNUP_ERROR';
 export const LOGIN_ERROR = 'LOGIN_ERROR';
 export const AUTH_CANCELED = 'AUTH_CANCELED';
 
+export const USER_EMAIL_CONFIRMED = 'USER_EMAIL_CONFIRMED';
+export const ACTION_CODE_ERROR = 'ACTION_CODE_ERROR';
 export const SET_USER_FIELD = 'SET_USER_FIELD';
 
 export const START_LOCATION_WATCH = 'START_LOCATION_WATCH';

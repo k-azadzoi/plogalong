@@ -3,7 +3,6 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { connect } from 'react-redux';
@@ -13,16 +12,16 @@ import {
   logOut,
   setUserData
 } from '../firebase/auth';
+
 import Banner from '../components/Banner';
 import Button from '../components/Button';
+import { NavLink } from '../components/Link';
 import PhotoButton from '../components/PhotoButton';
-import TextInputWithoutIcon from '../components/TextInputWithoutIcon';
-import TextInputWithIcon from '../components/TextInputWithIcon';
-import { setPreferences, logout} from '../redux/actions';
-import { getStats, pluralize } from '../util';
+import TextInput from '../components/TextInput';
+import { setPreferences } from '../redux/actions';
+import { getStats, calculateTotalPloggingTime, formatCompletedBadges, calculateCompletedBadges, formatPloggingMinutes } from '../util';
 import { asyncAlert } from '../util/native';
 
-import Colors from '../constants/Colors';
 import $S from '../styles';
 import ProfilePlaceholder from '../components/ProfilePlaceholder';
 
@@ -33,7 +32,7 @@ const stateFromProps =
                                displayName,
                                shareActivity = false,
                                emailUpdatesEnabled = false,
-                               privateProfile = false,
+                               privateProfile = false,                               
                              } = {}
                      }} = {}) => ({
                          params: {
@@ -67,6 +66,10 @@ class ProfileScreen extends React.Component {
     this.props.navigation.navigate('ChangePassword');
   }
 
+  goToVerify = () => {
+    this.props.navigation.navigate('VerifyAccount');
+  }
+
   save = event => {
     this.props.setUserData({...this.state.params});
   }
@@ -89,15 +92,19 @@ class ProfileScreen extends React.Component {
           ]
         );
 
-        if (result === 'logout') {
-          logOut();
-        } else if (result === 'create') {
+        if (result === 'create') {
           this.goToSignup();
+          return;
+        } else if (result !== 'logout') {
+          return;
         }
       }
-    } else {
-      logOut();
     }
+      logOut();
+  }
+
+  disableConserveMemory = () => {
+    this.props.updatePreferences({ conserveMemory: false });
   }
 
   setHomeBaseFromLocationInfo = () => {
@@ -122,10 +129,12 @@ class ProfileScreen extends React.Component {
 
     const hasPassword = !!currentUser.providerData.find(pd => pd.providerId === 'password');
 
+    const stats = getStats(currentUser, 'total');
+
     return (
         <ScrollView style={$S.screenContainer} contentContainerStyle={[$S.scrollContentContainer, styles.contentContainer]}>
           <Banner>
-            Plogging since {moment(created).format('MMMM D, YYYY')}
+            Plogging since {moment(created).format('MMMM YYYY')}
           </Banner>
 
           {!currentUser.isAnonymous ?
@@ -140,41 +149,42 @@ class ProfileScreen extends React.Component {
                  onCleared={() => { this.setProfilePhoto(null); }}
                />
                  <Text style={{ fontWeight: '500' }}>
-                   { currentUser ? 
-                     displayName : 
+                   { currentUser ?
+                     displayName :
                      'Mysterious Plogger' }
                  </Text>
                  <Text style={{ fontWeight: '500' }}>
                    { currentUser ? currentUser.email : '' }
                  </Text>
                  {!currentUser.emailVerified &&
-                 <Text style={$S.alertText}>
+                 <Text style={$S.alertText} onPress={this.goToVerify}>
                    Not verified
                  </Text> }
+               <NavLink route="More" params={{ screen: 'Achievements' }}>
+                 {formatPloggingMinutes(calculateTotalPloggingTime(stats))} and {formatCompletedBadges(calculateCompletedBadges(achievements))}
+               </NavLink>
              </View>
 
-             <View style={$S.inputGroup}>
-               <Text style={$S.inputLabel}>Username (visible to others)</Text>
-               <TextInputWithoutIcon
-                          autoCapitalize="none"
-                          value={params.displayName}
-                          autoCompleteType="username"
-                          onChangeText={setParam('displayName')}
-                          onBlur={this.save}
-                          maxLength={40}
-               />
-             </View>
+               <View style={$S.inputGroup}>
+                 <Text style={$S.inputLabel}>Username (visible to others)</Text>
+                 <TextInput autoCapitalize="none"
+                            value={params.displayName}
+                            onChangeText={setParam('displayName')}
+                            onBlur={this.save}
+                            maxLength={40}
+                 />
+               </View>
 
-             <View style={$S.inputGroup}>
-               <Text style={$S.inputLabel}>Home Base</Text>
-               <TextInputWithIcon autoCapitalize="sentences"
-                                  value={params.homeBase}
-                                  onChangeText={setParam('homeBase')}
-                                  onBlur={this.save}
-                                  onPress={this.setHomeBaseFromLocationInfo}
-                                  iconName="ios-navigate"
-                                  maxLength={40}/>
-             </View>
+               <View style={$S.inputGroup}>
+                 <Text style={$S.inputLabel}>Home Base</Text>
+                 <TextInput autoCapitalize="sentences"
+                            value={params.homeBase}
+                            onChangeText={setParam('homeBase')}
+                            onBlur={this.save}
+                            onPress={this.setHomeBaseFromLocationInfo}
+                            iconName="ios-navigate"
+                            maxLength={40}/>
+               </View>
 
              <View style={$S.switchInputGroup}>
                <Text style={$S.inputLabel}>
@@ -218,6 +228,9 @@ class ProfileScreen extends React.Component {
               <Button primary
                 onPress={this.goToChangePassword}
                 title="Change Password"           /> }
+            {this.props.preferences.conserveMemory &&
+             <Button onPress={this.disableConserveMemory}
+                     title="Disable Memory Conservation" />}
           </View>
         </ScrollView>
     );
@@ -278,6 +291,7 @@ export default connect(
   ({users, preferences}) => ({
     currentUser: users.current,
     locationInfo: users.locationInfo,
+    preferences
   }),
   (dispatch) => ({
     updatePreferences(preferences) {

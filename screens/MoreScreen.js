@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -17,11 +17,7 @@ import TermsScreen from './TermsScreen';
 import ContactScreen from './ContactScreen';
 import PrivacyScreen from './PrivacyScreen';
 import PloggingSuppliesScreen from './PloggingSuppliesScreen';
-
-
-
 import AchievementScreen from './AchievementScreen';
-
 
 
 import arrow from '../assets/svg/headerBackImage/arrow.svg';
@@ -66,10 +62,6 @@ export class MoreScreen extends React.Component {
         </Banner>
         <NavMenu routes={this.pages}/>
         <View style={$S.footerButtons}>
-          <Button title="Invite"
-                  large
-                  onPress={this.toggleIsInviteModalVisible}
-          />
           <Button title="Plog"
                   large primary
                   onPress={this.goToPlogScreen}
@@ -83,12 +75,6 @@ export class MoreScreen extends React.Component {
 const Stack = createStackNavigator();
 
 export default ({navigation, route}) => {
-  useEffect(() => {
-    if (route.params && route.params.subscreen)
-      navigation.navigate(route.params.subscreen);
-
-  }, [route.params]);
-
     return (
         <Stack.Navigator screenOptions={{
             headerBackTitle: ' ',

@@ -2,10 +2,11 @@ import * as geokit from 'geokit';
 import AsyncStorage from '@react-native-community/async-storage';
 
 import { coalesceCalls, rateLimited } from '../util/async';
+import { keep } from '../util/iter';
 import { updateLocalStorage } from '../util/native';
 
 import { LOAD_HISTORY, LOAD_LOCAL_HISTORY, LOCATION_CHANGED, SET_CURRENT_USER, LOAD_PLOGS } from './actionTypes';
-import { gotPlogData, localPlogsUpdated, plogsUpdated } from './actions';
+import { gotPlogData, localPlogIDs, plogsUpdated, loadLocalHistory } from './actions';
 import * as actions from './actions';
 import { plogDocToState, queryUserPlogs } from '../firebase/plogs';
 import { getRegion } from '../firebase/regions';
@@ -59,8 +60,10 @@ export default store => {
                 markDone(plogID);
               }
             }, error => {
-              dispatchUpdates({ id: plogID, status: 'error', error });
-              markDone(plogID);
+              if (remaining.has(plogID)) {
+                dispatchUpdates({ id: plogID, status: 'error', error });
+                markDone(plogID);
+              }
             }));
         }
       });
@@ -82,9 +85,7 @@ export default store => {
   let plogSubscriptions = new Map();
   let localRegionId;
   let localGeohash;
-  let loadMoreLocalPlogs;
-  let loadingLocalPlogs = false;
-  const runLocalPlogQuery = rateLimited(async (location) => {
+  const runRegionQuery = rateLimited(async (location) => {
     if (runningLocalPlogQuery)
       return;
 
@@ -128,39 +129,15 @@ export default store => {
 
       getRegion(id).onSnapshot(snapshot => {
         const regionData = snapshot.data() || {};
-        const plogIds = (regionData.recentPlogs || []).map(plog => plog.id);
+        const plogIds = keep(plog => plog && plog.id, regionData.recentPlogs || []);
 
         updateLocalStorage(REGION_CACHE_KEY, cached => {
           cached.geohashes = regionData.geohashes;
           return cached;
         });
+
+        store.dispatch(localPlogIDs(plogIds.reverse()));
         ///
-        let localPlogsLoaded = 0;
-        loadingLocalPlogs = false;
-        loadMoreLocalPlogs = (n=QUERY_LIMIT) => {
-          if (loadingLocalPlogs)
-            return false;
-
-          loadingLocalPlogs = true;
-          store.dispatch(localPlogsUpdated([], plogIds));
-
-          if (localPlogsLoaded < plogIds.length) {
-            const newPlogIds = plogIds.slice(localPlogsLoaded, localPlogsLoaded+n);
-            subscribeToPlogs(newPlogIds, plogSubscriptions, !localPlogsLoaded)
-              .finally(() => {
-                store.dispatch(localPlogsUpdated([], plogIds));
-                loadingLocalPlogs = false;
-              });
-            localPlogsLoaded = Math.min(plogIds.length, localPlogsLoaded+n);
-
-            return true;
-          }
-
-          return false;
-        };
-        ////
-
-        loadMoreLocalPlogs();
       }, _ => {
         subscribeToPlogs([], plogSubscriptions);
       });
@@ -227,22 +204,22 @@ export default store => {
 
       let {current, location} = store.getState().users;
 
-      if (type === LOCATION_CHANGED)
+      if (type === LOCATION_CHANGED) {
         location = payload.location;
-      else if (type === LOAD_LOCAL_HISTORY)
+
+        if (shouldLoadLocalHistory) {
+          next(action);
+          result = next(loadLocalHistory());
+        }
+      } else if (type === LOAD_LOCAL_HISTORY) {
         shouldLoadLocalHistory = true;
 
+        if (!location)
+          return;
+      }
+
       if (location && current && shouldLoadLocalHistory) {
-        if (type === LOAD_LOCAL_HISTORY && loadMoreLocalPlogs) {
-          // If there are no more plogs to load, or if loading is ongoing,
-          // swallow the action so the UI doesn't indicate that we're in a
-          // loading state
-          if (!loadMoreLocalPlogs(payload.number)) {
-            return;
-          }
-        } else {
-          runLocalPlogQuery(location, payload.number);
-        }
+        runRegionQuery(location);
       }
 
       if (result)
@@ -252,7 +229,7 @@ export default store => {
     } else if (type === LOAD_PLOGS) {
       const ids = payload.plogIDs.filter(id => !plogSubscriptions.has(id));
       store.dispatch(gotPlogData(ids.map(id => ({ id, status: 'loading' }))));
-      subscribeToPlogs(ids);
+      subscribeToPlogs(ids, plogSubscriptions);
     }
 
     return next(action);

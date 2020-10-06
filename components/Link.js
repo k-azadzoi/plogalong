@@ -1,10 +1,8 @@
 import * as React from 'react';
 import {
   Alert,
-  Button as RNButton,
   Linking,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 
@@ -14,15 +12,15 @@ import $S from '../styles';
 
 
 const Link = ({children, style, ...props}) => (
-  <TouchableOpacity {...props}>
-    <Text style={[$S.link, style]}>
-      {children}
-    </Text>
-  </TouchableOpacity>
+  <Text style={[$S.link, style]} {...props}>
+    {children}
+  </Text>
 );
 
-export const A = ({ href, ...props }) => (
-  <Text style={$S.link} {...props} onPress={() => Linking.openURL(href) } />
+export const A = ({ href, style, ...props }) => (
+  <Text style={[$S.link, style]}
+        {...props}
+        onPress={React.useCallback(() => Linking.openURL(href), [href])} />
 );
 
 // https://reactnative.dev/docs/linking
@@ -49,17 +47,15 @@ export const OpenURLButton = ({ url, children }) => {
 
 export const NavLink = ({children, onPress: onPressOrig, pop, route, style, screen, params, ...props}) => {
   const navigation = useNavigation();
-  let onPress;
-  if (pop)
-    onPress = (_, e) => {
+  const onPress = React.useCallback((_, e) => {
+    if (pop) {
       navigation.pop();
-      return onPressOrig && onPressOrig(navigation, e);
-    };
-  else if (route)
-    onPress = (_, e) => {
+    } else if (route) {
       navigation.navigate(route, screen ? { screen, params } : params);
-      return onPressOrig && onPressOrig(navigation, e);
-    };
+    }
+
+    return onPressOrig && onPressOrig(navigation, e);
+  }, [onPressOrig, navigation, pop, route]);
 
   return (
     <Text {...props} style={[$S.link, style]} onPress={onPress}>
