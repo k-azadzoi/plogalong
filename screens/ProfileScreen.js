@@ -160,9 +160,15 @@ class ProfileScreen extends React.Component {
                  <Text style={$S.alertText} onPress={this.goToVerify}>
                    Not verified
                  </Text> }
-               <NavLink route="More" params={{ screen: 'Achievements' }}>
-                 {formatPloggingMinutes(calculateTotalPloggingTime(stats))} and {formatCompletedBadges(calculateCompletedBadges(achievements))}
-               </NavLink>
+               {
+                 stats.count
+                   ? <NavLink route="More" params={{ screen: 'Achievements', initial: false }}>
+                       {formatPloggingMinutes(calculateTotalPloggingTime(stats))} and {formatCompletedBadges(calculateCompletedBadges(achievements))}
+                     </NavLink>
+                 : <NavLink route="Plog" >
+                     Plog something to earn your first badge!
+                   </NavLink>
+               }
              </View>
 
                <View style={$S.inputGroup}>
@@ -272,9 +278,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: '25%',
+    opacity: 0.1,
   },
   anonymousBigIcon: {
-    opacity: 0.1,
     width: '100%',
     height: '50%',
   },

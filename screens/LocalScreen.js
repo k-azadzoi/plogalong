@@ -29,7 +29,7 @@ const LocalScreen = ({ navigation }) => {
           const { plogData, localPlogs } = log;
 
           return {
-            plogIDs: log.localPlogsLoading ? [] : localPlogs,
+            plogIDs: localPlogs,
             currentUser: users.current,
             loading: log.localPlogsLoading,
           };
@@ -44,7 +44,7 @@ const LocalScreen = ({ navigation }) => {
     navigation.navigate('Plog');
   }, [navigation]);
 
-  const [history, , loadNextPage] = usePaginatedPlogs(plogIDs);
+  const [history, , loadNextPage] = usePaginatedPlogs(loading ? [] : plogIDs);
 
   const ActivityIcon = Options.activities.get('walking').icon;
   const noPloggers = history.length === 0 && !loading;

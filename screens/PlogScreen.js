@@ -134,6 +134,7 @@ class PlogScreen extends React.Component {
           duration: 200,
           easing: Easing.in(Easing.ease),
           toValue: 1,
+          useNativeDriver: true,
         })
         .start();
     }
@@ -160,7 +161,8 @@ class PlogScreen extends React.Component {
         Animated.timing(this._markerScale, {
           duration: 200,
           easing: Easing.in(Easing.ease),
-          toValue: 0.667
+          toValue: 0.667,
+          useNativeDriver: true,
         }).start();
     }
   }
@@ -583,6 +585,7 @@ export default (props) => {
     user: users.current,
     locationInfo: users.locationInfo,
     submitting: log.submitting,
+    lastPlogID: log.lastPlogID,
     error: log.logError,
     preferences,
   }), shallowEqual);
