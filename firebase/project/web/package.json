@@ -10,6 +10,6 @@
   },
   "dependencies": {
     "handlebars": "^4.7.6",
-    "walk": "^2.3.14"
+    "walk": "^2.3.15"
   }
 }
