@@ -32,7 +32,7 @@
     "@react-navigation/native": "^5.7.5",
     "@react-navigation/stack": "^5.9.2",
     "base-64": "^0.1.0",
-    "expo": "^39.0.0",
+    "expo": "^51.0.0",
     "expo-apple-authentication": "~2.2.1",
     "expo-camera": "~9.0.0",
     "expo-constants": "~9.2.0",
@@ -60,10 +60,10 @@
     "react-native-screens": "~2.10.1",
     "react-native-svg": "12.1.0",
     "react-native-webview": "10.7.0",
-    "react-redux": "^7.2.0",
+    "react-redux": "^9.0.0",
     "redux": "^4.0.1",
     "redux-thunk": "^2.3.0",
-    "yup": "^0.28.3"
+    "yup": "^1.0.0"
   },
   "devDependencies": {
     "babel-preset-expo": "^8.3.0",
